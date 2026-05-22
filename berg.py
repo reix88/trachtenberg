@@ -42,13 +42,16 @@ def gen_multi(n):
 def gen_any_len(n):
     return [(random.randrange(100, 99000), random.randrange(100, 999)) for _ in range(n)]
 
+SQ_END5  = [15, 25, 35, 45, 55, 65, 75, 85, 95]
+SQ_START5 = [51, 52, 53, 54, 56, 57, 58, 59]
+
 def gen_sq_end5():
-    arr = [15, 25, 35, 45, 55, 65, 75, 85, 95]
+    arr = SQ_END5.copy()
     random.shuffle(arr)
     return [(x, x) for x in arr]
 
 def gen_sq_start5():
-    arr = [51, 52, 53, 54, 56, 57, 58, 59]
+    arr = SQ_START5.copy()
     random.shuffle(arr)
     return [(x, x) for x in arr]
 
@@ -70,8 +73,8 @@ CATEGORIES = [
     {'name': 'Двузначное × двузначное', 'fn': lambda: gen_two_x_two(5), 'count': 5,  'hint': None, 'default': True},
     {'name': 'Многозначные множимые',   'fn': lambda: gen_multi(5),      'count': 5,  'hint': None, 'default': True},
     {'name': 'Умножение любой длины',   'fn': lambda: gen_any_len(5),    'count': 5,  'hint': None, 'default': True},
-    {'name': 'Квадрат (оканч. на 5)',   'fn': gen_sq_end5,               'count': 9,  'hint': None, 'default': True},
-    {'name': 'Квадрат (начин. с 5)',    'fn': gen_sq_start5,             'count': 8,  'hint': None, 'default': True},
+    {'name': 'Квадрат (оканч. на 5)',   'fn': gen_sq_end5,               'count': len(SQ_END5),    'hint': None, 'default': True},
+    {'name': 'Квадрат (начин. с 5)',    'fn': gen_sq_start5,             'count': len(SQ_START5),  'hint': None, 'default': True},
     {'name': 'Возведение в квадрат',    'fn': lambda: gen_sq(6),         'count': 6,  'hint': None, 'default': True},
 ]
 
@@ -104,6 +107,9 @@ def append_log(correct, wrong, pct, avg_sec, cat_names):
         ])
 
 # ── Display helpers ───────────────────────────────────────────────────────────
+def clear_screen():
+    os.system('cls' if os.name == 'nt' else 'clear')
+
 def draw_progress(done, total, correct, wrong):
     W = 24
     filled = int(W * done / total) if total else 0
@@ -123,9 +129,9 @@ def ask_question(a, b, q_num, q_total, correct, wrong, cat_name, show_hints, hin
     print(f"  {B}{a} × {b} = ?{X}")
     print()
 
+    t0 = time.time()
     while True:
         try:
-            t0 = time.time()
             ans = int(input(f"  {Y}>{X} "))
             elapsed = time.time() - t0
             break
@@ -149,35 +155,43 @@ def run_category(cat, show_hints):
     cat_correct = 0
     cat_wrong = 0
     times = []
+    interrupted = False
 
-    for i, (a, b) in enumerate(questions):
-        os.system('clear')
-        print(f"\n{B}{C}  ══ {cat['name'].upper()} ══{X}\n")
+    try:
+        for i, (a, b) in enumerate(questions):
+            clear_screen()
+            print(f"\n{B}{C}  ══ {cat['name'].upper()} ══{X}\n")
 
-        ok, elapsed = ask_question(
-            a, b,
-            q_num=i + 1,
-            q_total=n,
-            correct=cat_correct,
-            wrong=cat_wrong,
-            cat_name=cat['name'],
-            show_hints=show_hints,
-            hint_key=cat.get('hint'),
-        )
-        times.append(elapsed)
-        if ok:
-            cat_correct += 1
-        else:
-            cat_wrong += 1
+            ok, elapsed = ask_question(
+                a, b,
+                q_num=i + 1,
+                q_total=n,
+                correct=cat_correct,
+                wrong=cat_wrong,
+                cat_name=cat['name'],
+                show_hints=show_hints,
+                hint_key=cat.get('hint'),
+            )
+            times.append(elapsed)
+            if ok:
+                cat_correct += 1
+            else:
+                cat_wrong += 1
 
-        if i < n - 1:
-            input(f"\n  {DM}Enter → следующий вопрос...{X}")
+            if i < n - 1:
+                input(f"\n  {DM}Enter → следующий вопрос...{X}")
+    except (KeyboardInterrupt, EOFError):
+        interrupted = True
 
-    cat_pct = 100 * cat_correct / n if n else 0
-    print(f"\n  {DM}─── Итог раздела: {G}{cat_correct}{X}/{n}  ({cat_pct:.0f}%){DM} ───{X}")
-    input(f"\n  {DM}Enter → продолжить...{X}")
+    if not interrupted and (cat_correct + cat_wrong) > 0:
+        cat_pct = 100 * cat_correct / (cat_correct + cat_wrong)
+        print(f"\n  {DM}─── Итог раздела: {G}{cat_correct}{X}/{n}  ({cat_pct:.0f}%){DM} ───{X}")
+        try:
+            input(f"\n  {DM}Enter → продолжить...{X}")
+        except (KeyboardInterrupt, EOFError):
+            interrupted = True
 
-    return cat_correct, cat_wrong, times
+    return cat_correct, cat_wrong, times, interrupted
 
 # ── Category selection menu ───────────────────────────────────────────────────
 def select_categories():
@@ -185,7 +199,7 @@ def select_categories():
     show_hints = True
 
     while True:
-        os.system('clear')
+        clear_screen()
         print(f"\n{B}{C}╔════════════════════════════════════╗{X}")
         print(f"{B}{C}║    СИСТЕМА ТРАХТЕНБЕРГА  v2.0      ║{X}")
         print(f"{B}{C}╚════════════════════════════════════╝{X}\n")
@@ -229,15 +243,15 @@ def select_categories():
     return [CATEGORIES[i] for i in range(len(CATEGORIES)) if selected[i]], show_hints
 
 # ── Final results ─────────────────────────────────────────────────────────────
-def show_results(correct, wrong, all_times, chosen_cats):
+def show_results(correct, wrong, all_times, chosen_cats, per_cat, interrupted=False):
     total = correct + wrong
     pct = 100 * correct / total if total else 0
     avg_sec = sum(all_times) / len(all_times) if all_times else None
 
     rec = load_records()
     rec['sessions'] += 1
-    new_pct_record = pct > rec['best_pct']
-    new_time_record = (avg_sec is not None and
+    new_pct_record = not interrupted and total > 0 and pct > rec['best_pct']
+    new_time_record = (not interrupted and avg_sec is not None and
                        (rec['best_avg_sec'] is None or avg_sec < rec['best_avg_sec']))
     if new_pct_record:
         rec['best_pct'] = pct
@@ -245,12 +259,20 @@ def show_results(correct, wrong, all_times, chosen_cats):
         rec['best_avg_sec'] = avg_sec
     save_records(rec)
 
-    append_log(correct, wrong, pct, avg_sec, [c['name'] for c in chosen_cats])
+    if total > 0:
+        append_log(correct, wrong, pct, avg_sec, [c['name'] for c in chosen_cats])
 
-    os.system('clear')
+    clear_screen()
+    title = "ПРЕРВАНО" if interrupted else "РЕЗУЛЬТАТЫ"
     print(f"\n{B}{C}╔════════════════════════════════════╗{X}")
-    print(f"{B}{C}║            РЕЗУЛЬТАТЫ              ║{X}")
+    print(f"{B}{C}║{title:^36s}║{X}")
     print(f"{B}{C}╚════════════════════════════════════╝{X}\n")
+
+    if total == 0:
+        print(f"  {DM}Ни одного вопроса не пройдено.{X}\n")
+        sep()
+        input(f"\n  {DM}Enter для выхода...{X}")
+        return
 
     print(f"  Правильных:    {G}{B}{correct}{X} / {total}")
     print(f"  Неправильных:  {R}{B}{wrong}{X} / {total}")
@@ -263,9 +285,20 @@ def show_results(correct, wrong, all_times, chosen_cats):
         time_record = f"  {Y}{B}★ Лучшее время!{X}" if new_time_record else ''
         print(f"  Среднее время: {B}{avg_sec:.1f} сек{X}{time_record}")
 
+    if per_cat:
+        print(f"\n  {B}По категориям:{X}")
+        sep()
+        for name, c_corr, c_total, c_avg in per_cat:
+            if c_total == 0:
+                continue
+            cp = 100 * c_corr / c_total
+            cp_color = G if cp >= 90 else (Y if cp >= 70 else R)
+            time_str = f"{c_avg:.1f}s" if c_avg is not None else '—'
+            print(f"  {cp_color}{cp:5.1f}%{X}  {DM}{c_corr}/{c_total}{X}  {DM}avg {time_str:>6s}{X}  {name}")
+
     sessions = rec['sessions']
     best_pct = rec['best_pct']
-    best_time = f"{rec['best_avg_sec']:.1f} сек" if rec['best_avg_sec'] else '—'
+    best_time = f"{rec['best_avg_sec']:.1f} сек" if rec['best_avg_sec'] is not None else '—'
     print(f"\n  {DM}Сессий: {sessions}  |  Рекорд: {best_pct:.1f}%  |  Лучшее время: {best_time}{X}")
     print(f"  {DM}Лог записан в {LOG_FILE}{X}\n")
     sep()
@@ -278,14 +311,25 @@ def main():
     all_correct = 0
     all_wrong = 0
     all_times = []
+    per_cat = []
+    interrupted = False
 
     for cat in chosen_cats:
-        c, w, times = run_category(cat, show_hints)
+        c, w, times, was_interrupted = run_category(cat, show_hints)
         all_correct += c
         all_wrong += w
         all_times.extend(times)
+        if (c + w) > 0:
+            avg = sum(times) / len(times) if times else None
+            per_cat.append((cat['name'], c, c + w, avg))
+        if was_interrupted:
+            interrupted = True
+            break
 
-    show_results(all_correct, all_wrong, all_times, chosen_cats)
+    show_results(all_correct, all_wrong, all_times, chosen_cats, per_cat, interrupted)
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except (KeyboardInterrupt, EOFError):
+        print(f"\n{Y}Выход.{X}")
